@@ -3,15 +3,16 @@
 #include <gmp.h>
 
 #define LOG_PRECISE 0.0001
-#define MAX_A		250000
-#define MAX_B		250000
-#define MAX_C		250000
+#define MAX_A		1000
+#define MAX_B		1000
+#define MAX_C		1000
 #define MAX(a, b)	((a) > (b) ? (a) : (b))
-#define MAX_ABC		MAX(MAX_A, MAX(MAX_B, MAX_C))
-#define MAX_POW		7
+#define MAX_BC		MAX(MAX_B, MAX_C)
+#define MAX_ABC		MAX(MAX_A, MAX_BC)
+#define MAX_POW		1000
 #define MIN_POW		3
 #define MULT_BASE   (8lu*9*5*7*11*13*17*19*23)
-#define PRIMES_CNT	40000
+#define PRIMES_CNT	1000
 
 typedef unsigned long int INT;
 
@@ -22,16 +23,19 @@ INT prime_to_b_pow[PRIMES_CNT];
 INT prime_to_c_pow[PRIMES_CNT];
 
 double logn[MAX_ABC];
-INT power_mod_n[MAX_ABC][MAX_POW+1];
+INT power_mod_n[MAX_BC][MAX_POW+1];
 
 INT a, b, c, n, m;
-INT power_base_a_n, power_base_b_m, power_base;
+INT power_base_a_n, power_base_b_m, power_base_an_bm;
 double an, bm, log_lower, log_upper;
 
 INT power_base_n(INT a, INT n)
 {
-	INT p = a % MULT_BASE;
-	INT s = (n & 1) ? p : 1;
+	INT p, s;
+	if (a < MAX_BC && n <= MAX_POW)
+		return power_mod_n[a][n];
+	p = a % MULT_BASE;
+	s = (n & 1) ? p : 1;
 	while (n > 1) {
 		p = (p * p) % MULT_BASE;
 		n /= 2;
@@ -62,11 +66,11 @@ INT check(void)
 
 	logc = logn[c];
 	k = (INT)(log_lower / logc) + 1;
-	if (k < MIN_POW || k > MAX_POW)
+	if (k < MIN_POW)
 		return 0;
 	if (k * logc > log_upper)
 		return 0;
-	if (power_base != power_mod_n[c][k])
+	if (power_base_an_bm != power_base_n(c, k))
 		return 0;
 	if (check_bigint(k)) {
 		printf("  - %lu^%lu + %lu^%lu = %lu^%lu\n", a, n, b, m, c, k);
@@ -121,7 +125,7 @@ void init_log(void)
 void init_power(void)
 {
 	int i, j;
-	for (i=1; i<MAX_ABC; i++) {
+	for (i=1; i<MAX_BC; i++) {
 		power_mod_n[i][0] = 1;
 		for (j=1; j<=MAX_POW; j++)
 			power_mod_n[i][j] = (power_mod_n[i][j-1] * i) % MULT_BASE;
@@ -179,11 +183,15 @@ int main(void)
 			}
 			if (i == n_primes)
 				break;
+			if (b > a)
+				continue;
 			for (n = MIN_POW; n <= MAX_POW; n++) {
-				// power_base_a_n = power_base_n(a, n);
+				power_base_a_n = power_base_n(a, n);
 				an = n*logn[a];
 				for (m = MIN_POW; m <= MAX_POW; m++) {
-					// power_base_b_m = power_base_n(b, m);
+					if (a == b && m > n)
+						continue;
+					power_base_b_m = power_base_n(b, m);
 					bm = m*logn[b];
 					// log(a+b) = log(a+a*k) = log(a) + log(1+k), k = b/a = exp(log(b) - log(a))
 					if (an > bm) {
@@ -194,7 +202,7 @@ int main(void)
 						log_lower = bm;
 						log_upper = upper_log(bm, an);
 					}
-					power_base = (power_mod_n[a][n] + power_mod_n[b][m]) % MULT_BASE;
+					power_base_an_bm = (power_base_a_n + power_base_b_m) % MULT_BASE;
 #if 0
 					// loop by c
 					for (i=0; i<n_primes; i++)
