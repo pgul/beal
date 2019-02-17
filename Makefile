@@ -2,10 +2,10 @@ CC = gcc
 LINK = gcc
 LIB = ar
 RANLIB = ranlib
-CFLAGS = -Wall -funsigned-char -o $@
+CFLAGS = -Wall -funsigned-char -I /opt/local/include -o $@
 #CFLAGS += -g
 CFLAGS += -O2
-LFLAGS = $(CFLAGS)
+LFLAGS = $(CFLAGS) -L /opt/local/lib -lgmp
 
 %.o:    %.c
 	$(CC) -c $(CFLAGS) $<
