@@ -154,7 +154,7 @@ void init_power(void)
 {
 	int i, j, k;
 	int hash;
-	int has_mods = 0, many_vals = 0;
+	int has_mods = 0, many_vals = 0, collisions = 0;
 	mpz_init(mpz_temp);
 #if PREPARE_POWERS == 0
 	mpz_init(man);
@@ -184,6 +184,8 @@ void init_power(void)
 			for (k=0; k<VAL_BY_HASH; k++) {
 				if (hash_base[hash][k] == 0) {
 					hash_base[hash][k] = i;
+					if (k == VAL_BY_HASH - 1)
+						collisions++;
 					break;
 				}
 				if (hash_base[hash][k] == i)
@@ -193,7 +195,7 @@ void init_power(void)
 				many_vals++;
 		}
 	}
-	printf("Has %u modules from %u total with %u collisions\n", has_mods, MULT_BASE, many_vals);
+	printf("Has %u modules from %u total with %u collisions %u values out of hash\n", has_mods, MULT_BASE, collisions, many_vals);
 }
 
 int main(void)
@@ -223,7 +225,7 @@ int main(void)
 		// get next a
 		for (i=0; i<n_primes; i++)
 		{
-			if (a * prime[i] <= MAX_A)
+			if ((INT)a * prime[i] <= MAX_A)
 			{
 				a *= prime[i];
 				prime_to_a_pow[i] *= prime[i];
@@ -251,7 +253,7 @@ int main(void)
 					i = n_primes;
 					break;
 				}
-				if (b * prime[i] <= MAX_B)
+				if ((INT)b * prime[i] <= MAX_B)
 				{
 					b *= prime[i];
 					prime_to_b_pow[i] *= prime[i];
