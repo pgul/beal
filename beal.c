@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 #include <gmp.h>
 
@@ -12,29 +13,44 @@
 #define MAX_POW		1000
 #define MIN_POW		3
 #define MULT_BASE   (8u*9*5*7*11*13*17*19*23)
-#define HASH_BASE	10 * 999983 // it's a prime number
-#define VAL_BY_HASH	8
-#define PRIMES_CNT	1000
+// #define MULT_BASE	39916801
+// #define HASH_BASE	999983 // it's a prime number
+// #define HASH_BASE	(10*999983) // it's a prime number
+// #define HASH_BASE	39916801 // it's a prime number
+// #define HASH_BASE	1999993 // it's a prime number
+// #define HASH_BASE	3999971 // it's a prime number
+#define HASH_BASE	(9999991) // it's a prime number
+#define VAL_BY_HASH	16
+#define PRIMES_CNT	1000000
+#define PREPARE_POWERS 1
 
 typedef unsigned long int INT;
 
 int n_primes;
-INT prime[PRIMES_CNT];
-INT prime_to_a_pow[PRIMES_CNT];
-INT prime_to_b_pow[PRIMES_CNT];
+unsigned int prime[PRIMES_CNT];
+unsigned int prime_to_a_pow[PRIMES_CNT];
+unsigned int prime_to_b_pow[PRIMES_CNT];
 char has_mod_n[((MULT_BASE - 1) >> 3) + 1];
 
 double logn[MAX_ABC];
 unsigned int power_mod_n[MAX_BC][MAX_POW+1];
+#if PREPARE_POWERS
+mpz_t power[MAX_BC][MAX_POW+1];
+#else
+mpz_t man, mbm, mck;
+#endif
+mpz_t mpz_temp;
 unsigned int hash_base[HASH_BASE][VAL_BY_HASH];
 
-INT a, b, c, n, m;
+unsigned int a, b, c, n, m;
 INT power_base_a_n, power_base_b_m, power_base_an_bm;
 double an, bm, log_lower, log_upper;
 
-INT power_base_n(INT a, INT n)
+unsigned int power_base_n(unsigned int a, unsigned int n)
 {
-	INT p, s;
+	INT p;
+	unsigned int s;
+
 	if (a < MAX_BC && n <= MAX_POW)
 		return power_mod_n[a][n];
 	p = a % MULT_BASE;
@@ -49,27 +65,29 @@ INT power_base_n(INT a, INT n)
 	return s;
 }
 
-int check_bigint(INT k)
+int check_bigint(unsigned int k)
 {
-	mpz_t man, mbm, mck, manbm;
-	mpz_init(man);
+	int res;
+#if PREPARE_POWERS
+	mpz_add(mpz_temp, power[a][n], power[b][m]);
+	res = mpz_cmp(mpz_temp, power[c][k]);
+#else
 	mpz_ui_pow_ui(man, a, n);
-	mpz_init(mbm);
 	mpz_ui_pow_ui(mbm, b, m);
-	mpz_init(mck);
 	mpz_ui_pow_ui(mck, c, k);
-	mpz_init(manbm);
-	mpz_add(manbm, man, mbm);
-	return mpz_cmp(manbm, mck);
+	mpz_add(mpz_temp, man, mbm);
+	res = mpz_cmp(mpz_temp, mck);
+#endif
+	return res;
 }
 
 INT check(void)
 {
 	double logc;
-	INT k;
+	unsigned int k;
 
 	logc = logn[c];
-	k = (INT)(log_lower / logc) + 1;
+	k = (unsigned int)(log_lower / logc) + 1;
 	if (k < MIN_POW)
 		return 0;
 	if (k * logc > log_upper)
@@ -78,10 +96,11 @@ INT check(void)
 		return 0;
 	if (check_bigint(k))
 	{
-		printf("  - %lu^%lu + %lu^%lu = %lu^%lu\n", a, n, b, m, c, k);
+		printf("  - %u^%u + %u^%u = %u^%u\n", a, n, b, m, c, k);
 		return 0;
 	}
-	printf("*** %lu^%lu + %lu^%lu = %lu^%lu\n", a, n, b, m, c, k);
+	printf("*** %u^%u + %u^%u = %u^%u\n", a, n, b, m, c, k);
+	exit(0);
 	return k;
 }
 
@@ -121,6 +140,7 @@ void init_prime()
 	}
 	if (n_primes == PRIMES_CNT)
 		fprintf(stderr, "Increase PRIMES_CNT\n");
+	printf("Max prime number %u\n", prime[n_primes-1]);
 }
 
 void init_log(void)
@@ -135,12 +155,25 @@ void init_power(void)
 	int i, j, k;
 	int hash;
 	int has_mods = 0, many_vals = 0;
+	mpz_init(mpz_temp);
+#if PREPARE_POWERS == 0
+	mpz_init(man);
+	mpz_init(mbm);
+	mpz_init(mck);
+#endif
 	for (i=1; i<MAX_BC; i++)
 	{
 		power_mod_n[i][0] = 1;
+#if PREPARE_POWERS
+		mpz_init_set_ui(power[i][0], 1);
+#endif
 		for (j=1; j<=MAX_POW; j++)
 		{
 			unsigned int mod_n = ((INT)(power_mod_n[i][j-1]) * i) % MULT_BASE;
+#if PREPARE_POWERS
+			mpz_init(power[i][j]);
+			mpz_mul_si(power[i][j], power[i][j-1], i);
+#endif
 			power_mod_n[i][j] = mod_n;
 			if ((has_mod_n[mod_n >> 3] & (1 << (mod_n & 7))) == 0)
 			{
@@ -151,11 +184,13 @@ void init_power(void)
 			for (k=0; k<VAL_BY_HASH; k++) {
 				if (hash_base[hash][k] == 0) {
 					hash_base[hash][k] = i;
-					if (k == VAL_BY_HASH - 1)
-						many_vals++;
 					break;
 				}
+				if (hash_base[hash][k] == i)
+					break;
 			}
+			if (k >= VAL_BY_HASH-1)
+				many_vals++;
 		}
 	}
 	printf("Has %u modules from %u total with %u collisions\n", has_mods, MULT_BASE, many_vals);
@@ -164,7 +199,7 @@ void init_power(void)
 int main(void)
 {
 	int i, j;
-	INT tested_b = 0, checked_b = 0, collisions_b = 0;
+	INT checked_a = 0, tested_b = 0, checked_b = 0, collisions_b = 0;
 	unsigned int *arr_c;
 
 	if (MULT_BASE >= 0x100000000lu)
@@ -199,7 +234,8 @@ int main(void)
 		}
 		if (i == n_primes)
 			break;
-		printf("a = %lu\n", a);
+		checked_a++;
+		printf("a = %u (%lu/%u, %.1f%%)\n", a, checked_a, MAX_A, checked_a*100./MAX_A);
 		// loop by b
 		for (i=0; i<n_primes; i++)
 			prime_to_b_pow[i] = prime_to_a_pow[i] == 1 ? 1 : 0;
@@ -210,6 +246,11 @@ int main(void)
 			{
 				if (prime_to_b_pow[i] == 0)
 					continue;
+				if (prime[i] > a)
+				{
+					i = n_primes;
+					break;
+				}
 				if (b * prime[i] <= MAX_B)
 				{
 					b *= prime[i];
